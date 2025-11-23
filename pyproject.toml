@@ -1,6 +1,6 @@
 [project]
 name = "lvg-norm"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python implementation of LVG Norm (https://lhncbc.nlm.nih.gov/LSG/Projects/lvg/current/docs/userDoc/tools/norm.html)"
 readme = "README.md"
 authors = [{ name = "Haydn Jones", email = "haydnjonest@gmail.com" }]
@@ -11,11 +11,15 @@ dependencies = []
 lvg-norm = "lvg_norm.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3"]
+dev = ["pytest>=8.3", "ruff>=0.6.9"]
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# Ensure packaged wheels ship the LVG resource tables.
+source-include = ["src/lvg_norm/resources/**"]
 
 [tool.ruff]
 line-length = 120

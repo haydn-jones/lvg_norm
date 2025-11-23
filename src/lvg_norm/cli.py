@@ -50,10 +50,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional stopword list (one token per line). Default stopwords are used otherwise.",
     )
     parser.add_argument(
+        "--no-lvg-stopwords",
+        action="store_true",
+        help="Disable built-in LVG stop words/non-info/conjunction lists (use only custom stopwords).",
+    )
+    parser.add_argument(
         "--max-combinations",
         type=int,
-        default=4096,
-        help="Limit on variant combinations to guard against explosion (default: 4096).",
+        default=10,
+        help="Limit on variant combinations to guard against explosion (default: 10, matches LVG MAX_RULE_UNINFLECTED_TERMS).",
     )
     return parser
 
@@ -68,7 +73,11 @@ def main(argv: list[str] | None = None) -> int:
     if not inputs:
         parser.error("No input provided. Supply text, --file, or stdin.")
 
-    normer = NormNormalizer(stopwords=stopwords, max_combinations=args.max_combinations)
+    normer = NormNormalizer(
+        stopwords=stopwords,
+        use_lvg_stopwords=not args.no_lvg_stopwords,
+        max_combinations=args.max_combinations,
+    )
 
     for original in inputs:
         normalized = normer.normalize(original)

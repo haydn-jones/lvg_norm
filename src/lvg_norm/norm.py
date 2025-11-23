@@ -3,140 +3,207 @@ import unicodedata
 from collections.abc import Iterable, Sequence
 from itertools import product
 
-# ---------------------------------------------------------------------
-# Basic Unicode mapping tables (q0 + q7-ish behavior)
-# ---------------------------------------------------------------------
+from lvg_norm.lexicon import citation_form, lexicon_uninflect, rule_uninflect
+from lvg_norm.unicode_data import (
+    load_unicode_tables,
+    unicode_core_norm,
+    unicode_strip_or_map_non_ascii,
+    unicode_symbol_norm,
+)
+from lvg_norm.wordlists import load_lvg_stopword_set, load_remove_s_rules
 
-# fmt: off
-GREEK_LETTER_MAP = {
-    "α": "alpha",  "β": "beta",   "γ": "gamma",  "δ": "delta",
-    "ε": "epsilon","ζ": "zeta",   "η": "eta",    "θ": "theta",
-    "ι": "iota",   "κ": "kappa",  "λ": "lambda", "μ": "mu",
-    "ν": "nu",     "ξ": "xi",     "ο": "omicron","π": "pi",
-    "ρ": "rho",    "σ": "sigma",  "ς": "sigma",  "τ": "tau",
-    "υ": "upsilon","φ": "phi",    "χ": "chi",    "ψ": "psi",
-    "ω": "omega",
-    "Α": "alpha",  "Β": "beta",   "Γ": "gamma",  "Δ": "delta",
-    "Ε": "epsilon","Ζ": "zeta",   "Η": "eta",    "Θ": "theta",
-    "Ι": "iota",   "Κ": "kappa",  "Λ": "lambda", "Μ": "mu",
-    "Ν": "nu",     "Ξ": "xi",     "Ο": "omicron","Π": "pi",
-    "Ρ": "rho",    "Σ": "sigma",  "Τ": "tau",    "Υ": "upsilon",
-    "Φ": "phi",    "Χ": "chi",    "Ψ": "psi",    "Ω": "omega",
-}
-
-LIGATURE_MAP = {
-    "æ": "ae", "Æ": "AE",
-    "œ": "oe", "Œ": "OE",
-    "ß": "ss",
-    "ﬁ": "fi",
-    "ﬂ": "fl",
-}
-
-SYMBOL_MAP = {
-    "©": "(c)",
-    "®": "(r)",
-    "™": "(tm)",
-    "°": "(degree)",
-    "×": "*",
-    "·": ".",
-    "–": "-", 
-    "—": "-",  
-}
-
-DEFAULT_STOPWORDS = {
-    "a", "an", "and", "or", "the", "of", "for", "in", "on", "with", "without",
-    "to", "from", "by", "at", "is", "are", "was", "were", "be",
-    "nos", "n.o.s", "n.t.o.s",
-}
-
-SPECIAL_MORPH_OVERRIDES: dict[str, set[str]] = {
-    "hnf1a": {"hnf1a", "hnf1on", "hnf1um"},
-    "mus": {"mus", "mu"},
-    "scleroses": {"scleros", "sclerose", "scleroses", "sclerosis"},
-}
-# fmt: on
-
-GENITIVE_RE = re.compile(r"\b(\w+)(['’]s|['’])\b", flags=re.IGNORECASE)
-PAREN_PLURAL_RE = re.compile(r"\((?:s|es|ies)\)", flags=re.IGNORECASE)
-WHITESPACE_RE = re.compile(r"\s+")
+WHITESPACE_RE = re.compile(r"[ \t]+")
+REMOVE_S_PUNCT = {"-", "(", ","}
+GENITIVE_DELIMS = {" ", "\t", ","}
 
 
-def strip_diacritics(text: str) -> str:
-    """Remove diacritics using NFKD decomposition."""
-    normalized = unicodedata.normalize("NFKD", text)
-    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+def _remove_genitive_suffix(word: str, suffix: str, remove_chars: int) -> str:
+    """Mirror Java's RemoveLastChars: drop suffix chars only when at the end."""
+
+    lowered = word.lower()
+    size = len(word)
+    suffix_len = len(suffix)
+    idx = lowered.rfind(suffix)
+
+    while idx == size - suffix_len and idx > 0:
+        word = word[: idx + suffix_len - remove_chars]
+        lowered = word.lower()
+        size = len(word)
+        idx = lowered.rfind(suffix)
+
+    return word
 
 
-def unicode_core_norm(text: str) -> str:
-    """
-    Approximate LVG's Unicode Core Norm (q7):
+def _remove_genitive_from_word(word: str) -> str:
+    """Remove trailing possessives only (s'/x'/z'/ 's), matching Java."""
 
-      - map Greek letters to their names
-      - split ligatures
-      - map some symbols/punctuation
-      - strip diacritics
+    if len(word) < 3:
+        return word
 
-    This is a *very* lightweight approximation of the official algorithm.
-    """
-    out_chars: list[str] = []
-    for ch in text:
-        if ch in GREEK_LETTER_MAP:
-            out_chars.append(" " + GREEK_LETTER_MAP[ch] + " ")
-        elif ch in LIGATURE_MAP:
-            out_chars.append(LIGATURE_MAP[ch])
-        elif ch in SYMBOL_MAP:
-            out_chars.append(SYMBOL_MAP[ch])
-        else:
-            out_chars.append(ch)
-    text = "".join(out_chars)
-    text = strip_diacritics(text)
-    return text
-
-
-def unicode_strip_or_map_non_ascii(text: str) -> str:
-    """
-    Approximate q8: final stripping/mapping of non-ASCII characters.
-
-    Strategy:
-      - Keep ASCII as-is
-      - Try strip_diacritics() and keep if result is ASCII
-      - Otherwise drop the character
-    """
-    out: list[str] = []
-    for ch in text:
-        if ord(ch) < 128:
-            out.append(ch)
-            continue
-        decomposed = strip_diacritics(ch)
-        if decomposed and all(ord(c) < 128 for c in decomposed):
-            out.append(decomposed)
-        # else: drop
-    return "".join(out)
+    word = _remove_genitive_suffix(word, "s'", 1)
+    word = _remove_genitive_suffix(word, "x'", 1)
+    word = _remove_genitive_suffix(word, "z'", 1)
+    word = _remove_genitive_suffix(word, "'s", 2)
+    return word
 
 
 def remove_genitives(text: str) -> str:
     """
-    g: Remove genitives like:
-      "Graves's" -> "Graves"
-      "Graves'"  -> "Graves"
+    g: Remove possessive endings without stripping internal apostrophes.
+
+    Java tokenizes using space/tab/comma delimiters and only trims possessive
+    suffixes on each token. We mirror that here to avoid collapsing tokens like
+    "Ala'4" or "3'UTR".
     """
-    return GENITIVE_RE.sub(lambda m: m.group(1), text)
+
+    tokens: list[str] = []
+    current: list[str] = []
+
+    for ch in text:
+        if ch in GENITIVE_DELIMS:
+            if current:
+                tokens.append("".join(current))
+                current.clear()
+            tokens.append(ch)
+        else:
+            current.append(ch)
+
+    if current:
+        tokens.append("".join(current))
+
+    processed: list[str] = []
+    for tok in tokens:
+        if tok in GENITIVE_DELIMS:
+            processed.append(tok)
+        else:
+            processed.append(_remove_genitive_from_word(tok))
+
+    return "".join(processed).strip()
 
 
-def remove_parenthetic_plurals(text: str) -> str:
+def _trim_trailing_spaces(text: str) -> str:
+    """Remove trailing spaces only (mirrors Java TrimEnd)."""
+
+    while text.endswith(" "):
+        text = text[:-1]
+    return text
+
+
+def _remove_pattern_casefold(text: str, pattern: str) -> str:
+    """Remove all case-insensitive occurrences of *pattern*."""
+
+    out = text
+    lower = out.lower()
+    pat = pattern.lower()
+    size = len(pattern)
+
+    idx = lower.find(pat)
+    while idx != -1:
+        left = _trim_trailing_spaces(out[:idx])
+        right = out[idx + size :]
+        out = left + right
+        lower = out.lower()
+        idx = lower.find(pat)
+    return out
+
+
+def _match_remove_s_key(key: str, term: str, index: int) -> bool:
     """
-    rs: Remove parenthetic plural markers: (s), (es), (ies), etc.
+    Mirror RWildCard.IsMatchKey used by Java's removeS reverse trie.
+
+    Wildcards:
+      ^ = beginning of string
+      C = any character
+      D = digit
+      L = letter
+      S = space
+      P = punctuation (-,(,)
     """
-    return PAREN_PLURAL_RE.sub("", text)
+
+    if index < 0:
+        return key == "^"
+
+    ch = term[index]
+    lower = ch.lower()
+
+    if key == lower:
+        return True
+    if key == "C":
+        return True
+    if key == "D":
+        return ch.isdigit()
+    if key == "L":
+        return ch.isalpha()
+    if key == "S":
+        return ch == " "
+    if key == "P":
+        return ch in REMOVE_S_PUNCT
+    return False
+
+
+def _matches_remove_s_pattern(term: str, pattern: str) -> bool:
+    """Check if *term* matches a removeS pattern suffix."""
+
+    if not pattern.endswith("$"):
+        return False
+
+    pat = pattern[:-1]  # strip trailing $
+    pos = len(term) - 1
+
+    for key in reversed(pat):
+        if not _match_remove_s_key(key, term, pos):
+            return False
+        pos -= 1
+
+    return True
+
+
+def _matches_any_remove_s_rule(term: str, rules: Sequence[str]) -> bool:
+    return any(_matches_remove_s_pattern(term, rule.strip()) for rule in rules if rule.strip())
+
+
+def remove_parenthetic_plurals(text: str, rules: Sequence[str]) -> str:
+    """
+    rs: Remove parenthetic plural markers, honoring removeS exception rules.
+
+    Mirrors Java ToRemoveS: strip (es)/(ies) globally, then remove (s) unless
+    the preceding context matches an exception pattern from removeS.data.
+    """
+
+    out = _remove_pattern_casefold(text, "(es)")
+    out = _remove_pattern_casefold(out, "(ies)")
+
+    lower = out.lower()
+    pat = "(s)"
+    pat_len = len(pat)
+    idx = lower.find(pat)
+
+    while idx != -1:
+        left = out[:idx]
+        right = out[idx + pat_len :]
+
+        if not _matches_any_remove_s_rule(left, rules):
+            out = left + right
+            if right and right[0].isalpha():
+                out = left + " " + right
+            lower = out.lower()
+            idx = lower.find(pat)
+        else:
+            idx = lower.find(pat, idx + 1)
+
+    return out
 
 
 def replace_punct_with_space(text: str) -> str:
     """
-    o: Replace punctuation with spaces (based on Unicode category).
+    o: Replace punctuation and symbols with spaces (based on Unicode category).
     """
     out_chars: list[str] = []
+    punct_categories = {"Pd", "Ps", "Pe", "Pc", "Po"}
+    symbol_categories = {"Sm", "Sc", "Sk"}  # match Java Char.IsPunctuation
     for ch in text:
-        if unicodedata.category(ch).startswith("P"):
+        category = unicodedata.category(ch)
+        if category in punct_categories or category in symbol_categories:
             out_chars.append(" ")
         else:
             out_chars.append(ch)
@@ -145,84 +212,6 @@ def replace_punct_with_space(text: str) -> str:
 
 def tokenize(text: str) -> list[str]:
     return [t for t in WHITESPACE_RE.split(text) if t]
-
-
-def simple_uninflect(word: str) -> set[str]:
-    """
-    A VERY small heuristic uninflector for English.
-
-    Handles some common patterns:
-      - plural nouns: -s, -es, -ies
-      - verbs: -ed, -ied, -ing
-      - adjectives: -er, -est
-
-    This is *not* equivalent to the SPECIALIST lexicon morphology, but it
-    works well for many biomedical-ish surface forms and reproduces the
-    behaviour in your examples when combined with SPECIAL_MORPH_OVERRIDES.
-    """
-    lower = word.lower()
-
-    # Exact overrides to mimic SPECIALIST behaviour for a few tricky cases
-    if lower in SPECIAL_MORPH_OVERRIDES:
-        return {b.lower() for b in SPECIAL_MORPH_OVERRIDES[lower]}
-
-    bases: set[str] = set()
-
-    # plural -ies -> -y (bodies -> body)
-    if lower.endswith("ies") and len(lower) > 4:
-        bases.add(lower[:-3] + "y")
-
-    # plural -es for typical English patterns (boxes->box, classes->class, buses->bus)
-    if lower.endswith("es") and len(lower) > 3:
-        stem = lower[:-2]
-        if stem.endswith(("x", "z", "sh", "ch", "ss", "us", "o")):
-            bases.add(stem)
-
-    # plural -s -> base, but don't wreck Latin -us or words ending in -ss
-    if lower.endswith("s") and len(lower) > 3 and not lower.endswith(("us", "ss")):
-        bases.add(lower[:-1])
-
-    # past tense -ied -> -y (tried -> try)
-    if lower.endswith("ied") and len(lower) > 4:
-        bases.add(lower[:-3] + "y")
-
-    # generic -ed endings
-    if lower.endswith("ed") and len(lower) > 3:
-        bases.add(lower[:-2])
-        bases.add(lower[:-1])
-
-    # -ing (running -> run / rune-ish)
-    if lower.endswith("ing") and len(lower) > 4:
-        stem = lower[:-3]
-        bases.add(stem)
-        bases.add(stem + "e")
-        # Handle doubled consonant before -ing (running -> run)
-        if len(stem) > 2 and stem[-1] == stem[-2] and stem[-1] not in "aeiouy":
-            bases.add(stem[:-1])
-            bases.add(stem[:-1] + "e")
-
-    # comparative/superlative
-    if lower.endswith("er") and len(lower) > 3:
-        bases.add(lower[:-2])
-    if lower.endswith("est") and len(lower) > 4:
-        bases.add(lower[:-3])
-
-    # Fallback: if we found nothing, keep the original word.
-    if not bases:
-        bases.add(lower)
-
-    return bases
-
-
-def canonicalize_base_forms(bases: set[str]) -> set[str]:
-    """
-    Ct: citation form mapping.
-
-    In real Norm, this uses the SPECIALIST lexicon to collapse spelling
-    variants and choose a canonical form. Here we just return the bases
-    as-is, but this function is where you'd plug in SPECIALIST data.
-    """
-    return bases
 
 
 class NormNormalizer:
@@ -238,9 +227,26 @@ class NormNormalizer:
         with calls into the SPECIALIST lexicon / LVG morphology.
     """
 
-    def __init__(self, stopwords: Iterable[str] = DEFAULT_STOPWORDS, max_combinations: int = 4096):
-        self.stopwords = {s.lower() for s in stopwords}
+    def __init__(
+        self,
+        stopwords: Iterable[str] | None = None,
+        *,
+        use_lvg_stopwords: bool = True,
+        use_lexicon: bool = True,
+        use_citation: bool = True,
+        remove_s_rules: Sequence[str] | None = None,
+        max_combinations: int = 10,
+        min_term_length: int = 3,
+    ):
+        base_stopwords = load_lvg_stopword_set() if use_lvg_stopwords else set()
+        extra_stopwords = {s.lower() for s in stopwords} if stopwords else set()
+        self.stopwords = base_stopwords | extra_stopwords
+        self.remove_s_rules = list(remove_s_rules) if remove_s_rules is not None else load_remove_s_rules()
         self.max_combinations = max_combinations
+        self.use_lexicon = use_lexicon
+        self.use_citation = use_citation
+        self.min_term_length = min_term_length
+        self.unicode_tables = load_unicode_tables()
 
     def normalize(self, text: str) -> list[str]:
         """
@@ -248,18 +254,18 @@ class NormNormalizer:
 
         Returns:
             A sorted list of all normalized forms (strings with words
-            lowercased, uninflected, canonicalized, de-Unicoded, and
-            sorted alphabetically).
+            lowercased before morphology/citation, de-Unicoded, and sorted
+            alphabetically).
         """
 
-        # --- q0: (approx) map Unicode symbols/punctuation to ASCII-ish
-        text_q0 = unicode_core_norm(text)
+        # --- q0: map Unicode symbols/punctuation to ASCII-ish (symbolMap only)
+        text_q0 = unicode_symbol_norm(text, self.unicode_tables)
 
         # --- g: remove genitives
         text_g = remove_genitives(text_q0)
 
         # --- rs: remove parenthetic plural markers
-        text_rs = remove_parenthetic_plurals(text_g)
+        text_rs = remove_parenthetic_plurals(text_g, self.remove_s_rules)
 
         # --- o: replace punctuation with spaces
         text_o = replace_punct_with_space(text_rs)
@@ -271,20 +277,42 @@ class NormNormalizer:
         if not content_tokens:
             return []
 
-        # --- B + Ct: uninflect and map to citation form
-        token_variants: list[Sequence[str]] = []
+        # --- B: uninflect (lexicon with rule backoff)
+        base_variants: list[list[str]] = []
         for tok in content_tokens:
-            bases = simple_uninflect(tok)
-            cits = canonicalize_base_forms(bases)
-            token_variants.append(sorted(cits))  # deterministic order
+            bases: set[str] = set()
+            if self.use_lexicon:
+                lex_bases = lexicon_uninflect(tok)
+                if lex_bases:
+                    bases |= lex_bases
+                else:
+                    rule_bases = {
+                        base for base in rule_uninflect(tok) if len(base) >= self.min_term_length or base == tok
+                    }
+                    bases |= rule_bases
 
-        # Guard against combinatorial blow-up
+            if not bases:
+                bases.add(tok)
+
+            base_variants.append(sorted(bases))  # deterministic order
+
+        # Guard against combinatorial blow-up (Java's MAX_UNINFLECTIONS)
         total = 1
-        for vs in token_variants:
+        for vs in base_variants:
             total *= max(1, len(vs))
             if total > self.max_combinations:
-                token_variants = [[vs[0]] for vs in token_variants]
+                base_variants = [[tok] for tok in content_tokens]
                 break
+
+        # --- Ct: map bases to citation form (applied even when guard fires)
+        token_variants: list[list[str]] = []
+        for _bases in base_variants:
+            if self.use_citation:
+                # Java lowercases after citation lookup (GetCitation)
+                cited = {(citation_form(base) or base).lower() for base in _bases}
+                token_variants.append(sorted(cited))
+            else:
+                token_variants.append(_bases)
 
         # --- Generate all combinations, then apply q7 + q8 + w
         normalized_strings: set[str] = set()
@@ -292,15 +320,17 @@ class NormNormalizer:
         for combo in product(*token_variants):
             candidate = " ".join(combo)
 
-            # q7: Unicode core norm
-            cand_q7 = unicode_core_norm(candidate)
+            # q7: Unicode core norm (full tables, includes diacritics)
+            cand_q7 = unicode_core_norm(candidate, self.unicode_tables)
 
             # q8: strip/map remaining non-ASCII
-            cand_q8 = unicode_strip_or_map_non_ascii(cand_q7)
+            cand_q8 = unicode_strip_or_map_non_ascii(cand_q7, self.unicode_tables)
 
-            # Re-tokenize, lowercase, remove stopwords again just in case
-            toks_final = [t.lower() for t in tokenize(cand_q8)]
-            toks_final = [t for t in toks_final if t not in self.stopwords]
+            # w: strip punctuation introduced by q7/q8 (mirrors final SortWords)
+            cand_w = replace_punct_with_space(cand_q8)
+
+            # Re-tokenize after q7/q8/w mappings
+            toks_final = tokenize(cand_w)
             if not toks_final:
                 continue
 
