@@ -1,0 +1,32 @@
+[project]
+name = "lvg-norm"
+version = "0.1.0"
+description = "Python implementation of LVG Norm (https://lhncbc.nlm.nih.gov/LSG/Projects/lvg/current/docs/userDoc/tools/norm.html)"
+readme = "README.md"
+authors = [{ name = "Haydn Jones", email = "haydnjonest@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+lvg-norm = "lvg_norm.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3"]
+
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM", "I", "FURB"]
+ignore = ["B905", "E501", "SIM108", "SIM103"]
+fixable = ["ALL"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
