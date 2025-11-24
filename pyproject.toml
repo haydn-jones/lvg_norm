@@ -1,6 +1,6 @@
 [project]
-name = "lvg-norm"
-version = "0.2.0"
+name = "lvg_norm"
+version = "1.0.0"
 description = "Python implementation of LVG Norm (https://lhncbc.nlm.nih.gov/LSG/Projects/lvg/current/docs/userDoc/tools/norm.html)"
 readme = "README.md"
 authors = [{ name = "Haydn Jones", email = "haydnjonest@gmail.com" }]
