@@ -1,3 +1,3 @@
-from .norm import NormNormalizer
+from .norm import NormNormalizer, lvg_normalize
 
-__all__ = ["NormNormalizer"]
+__all__ = ["NormNormalizer", "lvg_normalize"]

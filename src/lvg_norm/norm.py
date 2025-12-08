@@ -339,3 +339,55 @@ class NormNormalizer:
             normalized_strings.add(" ".join(toks_final_sorted))
 
         return sorted(normalized_strings)
+
+
+_DEFAULT_NORMER: NormNormalizer | None = None
+
+
+def _get_default_normer() -> NormNormalizer:
+    global _DEFAULT_NORMER
+    if _DEFAULT_NORMER is None:
+        _DEFAULT_NORMER = NormNormalizer()
+    return _DEFAULT_NORMER
+
+
+def lvg_normalize(
+    text: str,
+    *,
+    stopwords: Iterable[str] | None = None,
+    use_lvg_stopwords: bool = True,
+    use_lexicon: bool = True,
+    use_citation: bool = True,
+    remove_s_rules: Sequence[str] | None = None,
+    max_combinations: int = 10,
+    min_term_length: int = 3,
+) -> list[str]:
+    """
+    Normalize text using the LVG-inspired pipeline without managing an instance.
+
+    When called with default options, reuse a shared NormNormalizer to avoid
+    reloading resources on every invocation.
+    """
+
+    if (
+        stopwords is None
+        and use_lvg_stopwords
+        and use_lexicon
+        and use_citation
+        and remove_s_rules is None
+        and max_combinations == 10
+        and min_term_length == 3
+    ):
+        normer = _get_default_normer()
+    else:
+        normer = NormNormalizer(
+            stopwords=stopwords,
+            use_lvg_stopwords=use_lvg_stopwords,
+            use_lexicon=use_lexicon,
+            use_citation=use_citation,
+            remove_s_rules=remove_s_rules,
+            max_combinations=max_combinations,
+            min_term_length=min_term_length,
+        )
+
+    return normer.normalize(text)

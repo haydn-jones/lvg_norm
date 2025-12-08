@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from lvg_norm.norm import NormNormalizer
+from lvg_norm import NormNormalizer, lvg_normalize
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -76,6 +76,25 @@ def test_max_combinations_guard() -> None:
     # picking an arbitrary stem. Mirror that behaviour here.
     result = normer.normalize("scleroses running")
     assert result == ["running scleroses"]
+
+
+def test_lvg_normalize_matches_normer(normer: NormNormalizer) -> None:
+    text = "HNF1A p.Q125*"
+    assert lvg_normalize(text) == normer.normalize(text)
+
+
+def test_lvg_normalize_respects_options() -> None:
+    kwargs = {
+        "stopwords": {"beta"},
+        "use_lvg_stopwords": False,
+        "use_lexicon": False,
+        "use_citation": False,
+        "remove_s_rules": [],
+        "max_combinations": 2,
+        "min_term_length": 4,
+    }
+    text = "beta-blockers running"
+    assert lvg_normalize(text, **kwargs) == NormNormalizer(**kwargs).normalize(text)
 
 
 def test_golden_corpus(normer: NormNormalizer) -> None:
