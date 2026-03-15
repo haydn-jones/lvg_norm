@@ -1,6 +1,7 @@
 import re
 import unicodedata
 from collections.abc import Iterable, Sequence
+from functools import cache
 from itertools import product
 
 from lvg_norm.lexicon import citation_form, lexicon_uninflect, rule_uninflect
@@ -15,6 +16,10 @@ from lvg_norm.wordlists import load_lvg_stopword_set, load_remove_s_rules
 WHITESPACE_RE = re.compile(r"[ \t]+")
 REMOVE_S_PUNCT = {"-", "(", ","}
 GENITIVE_DELIMS = {" ", "\t", ","}
+PUNCT_SYMBOL_CATEGORIES = frozenset({"Pd", "Ps", "Pe", "Pc", "Po", "Sm", "Sc", "Sk"})
+ASCII_PUNCT_TRANSLATION = {
+    codepoint: " " for codepoint in range(128) if unicodedata.category(chr(codepoint)) in PUNCT_SYMBOL_CATEGORIES
+}
 
 
 def _remove_genitive_suffix(word: str, suffix: str, remove_chars: int) -> str:
@@ -55,6 +60,8 @@ def remove_genitives(text: str) -> str:
     suffixes on each token. We mirror that here to avoid collapsing tokens like
     "Ala'4" or "3'UTR".
     """
+    if "'" not in text:
+        return text
 
     tokens: list[str] = []
     current: list[str] = []
@@ -169,6 +176,8 @@ def remove_parenthetic_plurals(text: str, rules: Sequence[str]) -> str:
     Mirrors Java ToRemoveS: strip (es)/(ies) globally, then remove (s) unless
     the preceding context matches an exception pattern from removeS.data.
     """
+    if "(" not in text:
+        return text
 
     out = _remove_pattern_casefold(text, "(es)")
     out = _remove_pattern_casefold(out, "(ies)")
@@ -198,16 +207,21 @@ def replace_punct_with_space(text: str) -> str:
     """
     o: Replace punctuation and symbols with spaces (based on Unicode category).
     """
+    if text.isascii():
+        return text.translate(ASCII_PUNCT_TRANSLATION)
+
     out_chars: list[str] = []
-    punct_categories = {"Pd", "Ps", "Pe", "Pc", "Po"}
-    symbol_categories = {"Sm", "Sc", "Sk"}  # match Java Char.IsPunctuation
     for ch in text:
-        category = unicodedata.category(ch)
-        if category in punct_categories or category in symbol_categories:
+        if _should_replace_with_space(ch):
             out_chars.append(" ")
         else:
             out_chars.append(ch)
     return "".join(out_chars)
+
+
+@cache
+def _should_replace_with_space(ch: str) -> bool:
+    return unicodedata.category(ch) in PUNCT_SYMBOL_CATEGORIES
 
 
 def tokenize(text: str) -> list[str]:

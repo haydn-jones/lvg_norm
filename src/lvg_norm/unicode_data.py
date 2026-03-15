@@ -20,7 +20,7 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache, lru_cache
 from importlib.resources import files
 
 RESOURCE_PACKAGE = "lvg_norm.resources.Unicode"
@@ -181,10 +181,21 @@ def _core_norm_char(ch: str, tables: UnicodeTables) -> str:
 def unicode_core_norm(text: str, tables: UnicodeTables | None = None) -> str:
     """Apply the LVG Unicode core sequence (q7-ish) using data tables."""
 
+    if text.isascii():
+        return text
+
     if tables is None:
         tables = load_unicode_tables()
 
+    if tables is load_unicode_tables():
+        return "".join(_core_norm_char_cached(ch) for ch in text)
+
     return "".join(_core_norm_char(ch, tables) for ch in text)
+
+
+@cache
+def _core_norm_char_cached(ch: str) -> str:
+    return _core_norm_char(ch, load_unicode_tables())
 
 
 def unicode_symbol_norm(text: str, tables: UnicodeTables | None = None) -> str:
@@ -195,15 +206,19 @@ def unicode_symbol_norm(text: str, tables: UnicodeTables | None = None) -> str:
     diacritics and other Unicode mappings are postponed until the later q7
     core normalization step.
     """
+    if text.isascii():
+        return text
+
     if tables is None:
         tables = load_unicode_tables()
-    text = _map_chars(text, tables.symbol_map)
-    text = _map_chars(text, tables.unicode_map)
-    return text
+    return text.translate(tables.symbol_map).translate(tables.unicode_map)
 
 
 def unicode_strip_or_map_non_ascii(text: str, tables: UnicodeTables | None = None) -> str:
     """Final q8 step: map via nonStripMap or drop non-ASCII characters."""
+
+    if text.isascii():
+        return text
 
     if tables is None:
         tables = load_unicode_tables()

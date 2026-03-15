@@ -4,7 +4,6 @@ import gzip
 import importlib.resources.abc as resources_abc
 import pickle
 from collections import defaultdict
-from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache, lru_cache
 from importlib.resources import files
@@ -44,10 +43,10 @@ class InflectionRule:
 @dataclass(frozen=True)
 class _InflTables:
     base_index: dict[str, set[str]]
-    citation_index: dict[str, set[str]]
+    citation_index: dict[str, str]
 
 
-_CACHE_VERSION = 1
+_CACHE_VERSION = 2
 
 
 def _infl_cache_path() -> Path:
@@ -180,7 +179,7 @@ def _load_infl_tables() -> _InflTables:
         return cached
 
     base_index: dict[str, set[str]] = defaultdict(set)
-    citation_index: dict[str, set[str]] = defaultdict(set)
+    citation_index: dict[str, str] = {}
 
     with (
         gzip.open(path_gz, "rt", encoding="utf-8")  # type: ignore
@@ -205,7 +204,13 @@ def _load_infl_tables() -> _InflTables:
                 # Preserve citation case to mirror Java's comparator ordering.
                 if infl == "1" and citation:
                     surface = parts[0].strip().lower()
-                    citation_index[surface].add(citation)
+                    current = citation_index.get(surface)
+                    if (
+                        current is None
+                        or len(citation) < len(current)
+                        or (len(citation) == len(current) and citation < current)
+                    ):
+                        citation_index[surface] = citation
 
     tables = _InflTables(dict(base_index), dict(citation_index))
     _write_cached_tables(cache_path, tables, source_mtime)
@@ -233,7 +238,7 @@ def _inflected_surface_set() -> set[str]:
 
 
 @lru_cache(maxsize=1)
-def _load_citation_index() -> dict[str, set[str]]:
+def _load_citation_index() -> dict[str, str]:
     """
     Base form -> citation targets, restricted to base inflection rows.
 
@@ -251,6 +256,7 @@ def lexicon_uninflect(word: str) -> set[str]:
     return set(idx.get(word.lower(), ()))
 
 
+@cache
 def citation_form(word: str) -> str | None:
     """
     Return the citation (canonical) form for a base token if available.
@@ -262,20 +268,16 @@ def citation_form(word: str) -> str | None:
     """
 
     citations = _load_citation_index()
-    options = citations.get(word.lower())
-    if not options:
-        return None
-
-    return sorted(options, key=lambda c: (len(c), c))[0]
+    return citations.get(word.lower())
 
 
-def _wildcard_matches_key(key: str, index: int, chars: Sequence[str]) -> bool:
+def _wildcard_matches_key(key: str, index: int, term: str, term_len: int) -> bool:
     if index < 0:
         return key == "^"
-    if index >= len(chars):
+    if index > term_len:
         return False
 
-    ch = chars[index]
+    ch = "$" if index == term_len else term[index]
     if key == ch:
         return True
     if key == "V":
@@ -287,19 +289,19 @@ def _wildcard_matches_key(key: str, index: int, chars: Sequence[str]) -> bool:
     if key == "L":
         return ch in LETTER_SET or ch.isalpha()
     if key == "S":
-        return index < len(chars) - 1 and ch == chars[index + 1]
+        return index + 1 < term_len and ch == term[index + 1]
     if key == "$":
-        return index == len(chars) - 1
+        return index == term_len
     return False
 
 
 def _matches_suffix(term: str, pattern: str) -> bool:
     """Mirror WildCard.IsMatchKey over a reversed trie suffix."""
 
-    chars = list(term) + ["$"]
+    term_len = len(term)
     for offset, key in enumerate(reversed(pattern)):
-        index = len(chars) - 1 - offset
-        if not _wildcard_matches_key(key, index, chars):
+        index = term_len - offset
+        if not _wildcard_matches_key(key, index, term, term_len):
             return False
     return True
 
