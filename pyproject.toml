@@ -10,11 +10,11 @@ dependencies = []
 [project.scripts]
 lvg-norm = "lvg_norm.cli:main"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pytest>=8.3", "ruff>=0.6.9"]
 
 [build-system]
-requires = ["uv_build>=0.9.11,<0.10.0"]
+requires = ["uv_build>=0.9.11,<1.0.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

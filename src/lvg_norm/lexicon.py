@@ -101,7 +101,7 @@ def _traversable_mtime(node: resources_abc.Traversable) -> float:
     stat_fn = getattr(node, "stat", None)
     if callable(stat_fn):
         try:
-            return stat_fn().st_mtime  # type: ignore[call-arg]
+            return stat_fn().st_mtime
         except OSError:
             return 0.0
     return 0.0

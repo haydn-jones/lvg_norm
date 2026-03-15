@@ -7242,7 +7242,7 @@ PEPP|pepp
 KLF4 inhibitor|inhibiter klf4
 in vitro import|import vitro
 clathrin- and caveolin-dependent endocytosis|caveolin clathrin dependant endocytosis
-Kidney rhabdoid tumor|kidney rhabdoid tumor
+Kidney rhabdoid tumor|kidney rabdoid tumor
 Mus musculus BALB/cJrj|balb cjrj mu musculus
 Mus musculus BALB/cJrj|balb cjrj mus musculus
 GSCs10|gscs10
@@ -18160,7 +18160,7 @@ UPLC-ESI-TQD|esi tqd uplc
 Plasmonic photothermal|photothermal plasmonic
 darinaparsin uptake|darinaparsin uptake
 Smart-Seq 2|2 seq smart
-Rhabdoid sarcoma|rhabdoid sarcoma
+Rhabdoid sarcoma|rabdoid sarcoma
 Serum TfR level|level serum tfr
 Subendothelial matrix degradation|degradation matrix subendothelial
 buserelin|buserelin
@@ -62905,7 +62905,7 @@ Frequency of micronuclei|frequency micronucleus
 Seasonal influenza|influenza seasonal
 PTPRZ1-MET|met ptprz1
 PTPRZ1-MET|meet ptprz1
-atypical teratoid rhabdoid tumor|atypical rhabdoid teratoid tumor
+atypical teratoid rhabdoid tumor|atypical rabdoid teratoid tumor
 percentage of basal cellular OCR|basal cellular ocr percentage
 AGII|agii
 AGII|agius
@@ -78589,7 +78589,7 @@ congenital neutropenia|congenital neutropenia
 RNF43‑mutant pancreatic ductal adenocarcinoma|adenocarcinoma ductal mutant pancreatic rnf43
 MyceEF2K|myceef2k
 Enhancer profiling|enhancer profile
-Rhabdoid tumor predisposition syndrome|predisposition rhabdoid syndrome tumor
+Rhabdoid tumor predisposition syndrome|predisposition rabdoid syndrome tumor
 tissue lipid analysis|analysis lipid tissue
 Increased fecal bile acid excretion|acid bile excretion fecal increase
 Increased fecal bile acid excretion|acid bile excretion fecal increased
@@ -92058,7 +92058,7 @@ guaiane|guaiane
 Multiple spinal meningiomas|meningeoma multiple spinal
 NCT02737501|nct02737501
 NCT03330106|nct03330106
-Mature red paprika|mature paprika red
+Mature red paprika|mature paprica red
 mass photometry|mas photometry
 mass photometry|mass photometry
 mES cell|cell me
@@ -122881,7 +122881,7 @@ TagA|tagum
 Parietal Thickness|parietal thickness
 ventral Bed Nucleus of the Stria Terminalis|bed nucleus stria terminali ventral
 ventral Bed Nucleus of the Stria Terminalis|bed nucleus stria terminalis ventral
-rhabdoid tumour cell|cell rhabdoid tumor
+rhabdoid tumour cell|cell rabdoid tumor
 STINGdeficient mice|mice stingdeficient
 STINGdeficient mice|mouse stingdeficient
 Kaplan-Meier plotter|kaplan meier plotter
@@ -151291,7 +151291,7 @@ number of autophagosomes|autophagosome number
 Lung lesion burden|burden lesion lung
 Disrupted spatial organization of germline nuclei|disrupt germline nucleus organisation spacial
 neutral ceramidase inhibitor|ceramidase inhibiter neutral
-Rhabdoid brain tumor|brain rhabdoid tumor
+Rhabdoid brain tumor|brain rabdoid tumor
 Statin sensitivity|sensitivity statin
 2-NBD glucose uptake|2 glucose nbd uptake
 axon growth inhibition|axon growth inhibition
@@ -170812,7 +170812,7 @@ TRPV4-Gcamp-GFP|gcamp gfp trpv4
 seven domain (7D) cadherins|7d cadherin domain seven
 Disc1 mutant mice|disc1 mice mutant
 Disc1 mutant mice|disc1 mouse mutant
-Rhabdoid melanoma|melanoma rhabdoid
+Rhabdoid melanoma|melanoma rabdoid
 ApcMin/+ mice|apcmin mice
 ApcMin/+ mice|apcmin mouse
 Zaverage|zaverage
@@ -184087,8 +184087,6 @@ Oil Red-O positivity|o oil positivity red
 Type A spermatogonia|a spermatogonia type
 Type A spermatogonia|a spermatogonium type
 MADA|mada
-MADA|madon
-MADA|madum
 O3N/O1C|o1c o3n
 number of days until bolting|bolt day numb until
 number of days until bolting|bolt day number until
@@ -224821,7 +224819,7 @@ chapatti quality score|chapati quality score
 IGFBP3PAI-1|1 igfbp3pai
 IGFBP3PAI-1|1 igfbp3paus
 RGT_C|c rgt
-Atypical teratoid/rhabdoid tumors|atypical rhabdoid teratoid tumor
+Atypical teratoid/rhabdoid tumors|atypical rabdoid teratoid tumor
 thiazolidinedione full agonist|agonist full thiazolidinedione
 PAGERG|pagerg
 Endomysial autoantibodies|autoantibody endomysial
@@ -235842,7 +235840,7 @@ Brk-GFP|brk gfp
 VEGFR-2 kinase activity|2 activity kinase vegfr
 HLA-G+ trophoblast|g hla trophoblast
 Fibrous septa|fibrose septum
-rhabdoid tumor|rhabdoid tumor
+rhabdoid tumor|rabdoid tumor
 Mesoderm spreading phenotype|mesoderm phenotype spread
 Mesoderm spreading phenotype|mesoderm phenotype spreading
 VCF analysis|analysis vcf

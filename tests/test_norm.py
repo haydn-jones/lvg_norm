@@ -84,17 +84,32 @@ def test_lvg_normalize_matches_normer(normer: NormNormalizer) -> None:
 
 
 def test_lvg_normalize_respects_options() -> None:
-    kwargs = {
-        "stopwords": {"beta"},
-        "use_lvg_stopwords": False,
-        "use_lexicon": False,
-        "use_citation": False,
-        "remove_s_rules": [],
-        "max_combinations": 2,
-        "min_term_length": 4,
-    }
+    stopwords = {"beta"}
+    use_lvg_stopwords = False
+    use_lexicon = False
+    use_citation = False
+    remove_s_rules: list[str] = []
+    max_combinations = 2
+    min_term_length = 4
     text = "beta-blockers running"
-    assert lvg_normalize(text, **kwargs) == NormNormalizer(**kwargs).normalize(text)
+    assert lvg_normalize(
+        text,
+        stopwords=stopwords,
+        use_lvg_stopwords=use_lvg_stopwords,
+        use_lexicon=use_lexicon,
+        use_citation=use_citation,
+        remove_s_rules=remove_s_rules,
+        max_combinations=max_combinations,
+        min_term_length=min_term_length,
+    ) == NormNormalizer(
+        stopwords=stopwords,
+        use_lvg_stopwords=use_lvg_stopwords,
+        use_lexicon=use_lexicon,
+        use_citation=use_citation,
+        remove_s_rules=remove_s_rules,
+        max_combinations=max_combinations,
+        min_term_length=min_term_length,
+    ).normalize(text)
 
 
 def test_golden_corpus(normer: NormNormalizer) -> None:
