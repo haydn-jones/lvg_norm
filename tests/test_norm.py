@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -129,6 +130,82 @@ def test_golden_corpus(normer: NormNormalizer) -> None:
             f"{total_mismatches}/{len(GOLDEN_EXAMPLES)} golden examples diverge from the LVG baseline. "
             f"Sample diffs:\n{formatted}"
         )
+
+
+@pytest.fixture
+def chem_normer() -> NormNormalizer:
+    return NormNormalizer(pipeline="chemical")
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # Locants, parens, hyphens, indicated hydrogen all preserved; tokens not sorted.
+        ("(2S,3R)-2,3-dihydro-1H-indole", ["(2s,3r)-2,3-dihydro-1h-indole"]),
+        # Greek expansion glued to parent name; plural NOT uninflected.
+        ("β-lactam antibiotics", ["beta-lactam antibiotics"]),
+        ("α-tocopherol", ["alpha-tocopherol"]),
+        # ± maps to +/- via existing nonStripMap because punct->space is skipped.
+        ("(±)-tartaric acid", ["(+/-)-tartaric acid"]),
+        # Unicode prime folds to ASCII apostrophe and survives (no punct stripping).
+        ("2,2′-bipyridine", ["2,2'-bipyridine"]),
+        # Stereo descriptor case differences collapse via end casefold; (s) is NOT
+        # treated as a parenthetic plural (as it would be in the medical pipeline).
+        ("(R)-2-bromopyridine", ["(r)-2-bromopyridine"]),
+        ("(s)-2-bromopyridine", ["(s)-2-bromopyridine"]),
+        # Heteroatom/sugar descriptors preserved alongside locants.
+        ("N-methyl-D-aspartate", ["n-methyl-d-aspartate"]),
+        # Substituent grouping in parens kept intact.
+        ("4-(dimethylamino)pyridine", ["4-(dimethylamino)pyridine"]),
+        # Square brackets and dots in von-Baeyer descriptors kept intact.
+        ("bicyclo[2.2.1]heptane", ["bicyclo[2.2.1]heptane"]),
+        # No English morphology, no stopword removal — all tokens kept in order.
+        ("phenols and amines", ["phenols and amines"]),
+        # Order preservation across multiple substituent positions.
+        ("2-methyl-3-ethylpyridine", ["2-methyl-3-ethylpyridine"]),
+    ],
+)
+def test_chemical_pipeline(chem_normer: NormNormalizer, text: str, expected: list[str]) -> None:
+    assert chem_normer.normalize(text) == expected
+
+
+def test_chemical_pipeline_distinguishes_enantiomers(chem_normer: NormNormalizer) -> None:
+    r_form = chem_normer.normalize("(R)-2-bromopyridine")
+    s_form = chem_normer.normalize("(S)-2-bromopyridine")
+    assert r_form != s_form
+
+
+def test_chemical_pipeline_case_insensitive_for_stereo(chem_normer: NormNormalizer) -> None:
+    assert chem_normer.normalize("(R)-2-bromopyridine") == chem_normer.normalize("(r)-2-bromopyridine")
+    assert chem_normer.normalize("(2S,3R)-X") == chem_normer.normalize("(2s,3r)-X")
+
+
+def test_chemical_pipeline_preserves_token_order(chem_normer: NormNormalizer) -> None:
+    forward = chem_normer.normalize("2-methyl-3-ethylpyridine")
+    reverse = chem_normer.normalize("3-methyl-2-ethylpyridine")
+    assert forward != reverse
+
+
+def test_chemical_pipeline_empty_input(chem_normer: NormNormalizer) -> None:
+    assert chem_normer.normalize("") == []
+    assert chem_normer.normalize("   ") == []
+
+
+def test_lvg_normalize_chemical_matches_normer(chem_normer: NormNormalizer) -> None:
+    text = "(2S,3R)-2,3-dihydro-1H-indole"
+    assert lvg_normalize(text, pipeline="chemical") == chem_normer.normalize(text)
+
+
+def test_invalid_pipeline_raises() -> None:
+    kwargs: dict[str, Any] = {"pipeline": "bogus"}
+    with pytest.raises(ValueError, match="pipeline must be one of"):
+        NormNormalizer(**kwargs)
+
+
+def test_default_pipeline_is_medical(normer: NormNormalizer) -> None:
+    # Pin: the default preset must not change without an explicit decision.
+    assert normer.pipeline == "medical"
+    assert normer.normalize("β-lactam antibiotics") == ["antibiotic beta lactam"]
 
 
 @pytest.mark.xfail(reason="Known divergences from LVG norm; serves as a watch list.", strict=True)

@@ -3,6 +3,7 @@ import unicodedata
 from collections.abc import Iterable, Sequence
 from functools import cache
 from itertools import product
+from typing import Literal
 
 from lvg_norm.lexicon import citation_form, lexicon_uninflect, rule_uninflect
 from lvg_norm.unicode_data import (
@@ -12,6 +13,9 @@ from lvg_norm.unicode_data import (
     unicode_symbol_norm,
 )
 from lvg_norm.wordlists import load_lvg_stopword_set, load_remove_s_rules
+
+PipelineMode = Literal["medical", "chemical"]
+_VALID_PIPELINES: tuple[PipelineMode, ...] = ("medical", "chemical")
 
 WHITESPACE_RE = re.compile(r"[ \t]+")
 REMOVE_S_PUNCT = {"-", "(", ","}
@@ -234,17 +238,21 @@ class NormNormalizer:
 
         q0 -> g -> rs -> o -> t -> l -> B -> Ct -> q7 -> q8 -> w
 
-    Notes:
-      * Uses light heuristics + a few overrides to match your examples.
-      * To be *really* faithful to NLM Norm, replace:
-            - simple_uninflect() and canonicalize_base_forms()
-        with calls into the SPECIALIST lexicon / LVG morphology.
+    Two pipeline presets:
+      * "medical" (default) — the full LVG-inspired flow above. Best for
+        free-text English (MeSH/UMLS-style content).
+      * "chemical" — q0 -> q7 -> q8 -> casefold + whitespace collapse.
+        Skips genitives, parenthetic-plural removal, punctuation->space,
+        stopword stripping, English uninflection/citation lookup, and the
+        final token sort. Use this for IUPAC names and small-molecule
+        nomenclature where punctuation is structural and word order matters.
     """
 
     def __init__(
         self,
         stopwords: Iterable[str] | None = None,
         *,
+        pipeline: PipelineMode = "medical",
         use_lvg_stopwords: bool = True,
         use_lexicon: bool = True,
         use_citation: bool = True,
@@ -252,6 +260,11 @@ class NormNormalizer:
         max_combinations: int = 10,
         min_term_length: int = 3,
     ):
+        if pipeline not in _VALID_PIPELINES:
+            msg = f"pipeline must be one of {_VALID_PIPELINES}, got {pipeline!r}"
+            raise ValueError(msg)
+        self.pipeline: PipelineMode = pipeline
+
         base_stopwords = load_lvg_stopword_set() if use_lvg_stopwords else set()
         extra_stopwords = {s.lower() for s in stopwords} if stopwords else set()
         self.stopwords = base_stopwords | extra_stopwords
@@ -267,11 +280,32 @@ class NormNormalizer:
         Normalize a single input string.
 
         Returns:
-            A sorted list of all normalized forms (strings with words
-            lowercased before morphology/citation, de-Unicoded, and sorted
-            alphabetically).
+            A sorted list of all normalized forms. For the "medical" pipeline
+            the strings are uninflected, citation-mapped, de-Unicoded, and
+            their tokens are sorted alphabetically. For the "chemical"
+            pipeline the result is a single-element list with the input
+            de-Unicoded, casefolded, and whitespace-collapsed (order
+            preserved, punctuation kept).
         """
 
+        if self.pipeline == "chemical":
+            return self._normalize_chemical(text)
+        return self._normalize_medical(text)
+
+    def _normalize_chemical(self, text: str) -> list[str]:
+        # q0: fold primes and other Unicode symbol/lookalike characters to ASCII.
+        out = unicode_symbol_norm(text, self.unicode_tables)
+        # q7: Unicode core normalization (ligatures, diacritics, ...).
+        out = unicode_core_norm(out, self.unicode_tables)
+        # q8: nonStripMap (e.g. α -> alpha, ± -> +/-) or drop unmappable non-ASCII.
+        out = unicode_strip_or_map_non_ascii(out, self.unicode_tables)
+        # casefold + whitespace collapse, keeping token order intact.
+        collapsed = " ".join(tokenize(out)).lower()
+        if not collapsed:
+            return []
+        return [collapsed]
+
+    def _normalize_medical(self, text: str) -> list[str]:
         # --- q0: map Unicode symbols/punctuation to ASCII-ish (symbolMap only)
         text_q0 = unicode_symbol_norm(text, self.unicode_tables)
 
@@ -355,19 +389,21 @@ class NormNormalizer:
         return sorted(normalized_strings)
 
 
-_DEFAULT_NORMER: NormNormalizer | None = None
+_DEFAULT_NORMERS: dict[PipelineMode, NormNormalizer] = {}
 
 
-def _get_default_normer() -> NormNormalizer:
-    global _DEFAULT_NORMER
-    if _DEFAULT_NORMER is None:
-        _DEFAULT_NORMER = NormNormalizer()
-    return _DEFAULT_NORMER
+def _get_default_normer(pipeline: PipelineMode) -> NormNormalizer:
+    normer = _DEFAULT_NORMERS.get(pipeline)
+    if normer is None:
+        normer = NormNormalizer(pipeline=pipeline)
+        _DEFAULT_NORMERS[pipeline] = normer
+    return normer
 
 
 def lvg_normalize(
     text: str,
     *,
+    pipeline: PipelineMode = "medical",
     stopwords: Iterable[str] | None = None,
     use_lvg_stopwords: bool = True,
     use_lexicon: bool = True,
@@ -392,10 +428,11 @@ def lvg_normalize(
         and max_combinations == 10
         and min_term_length == 3
     ):
-        normer = _get_default_normer()
+        normer = _get_default_normer(pipeline)
     else:
         normer = NormNormalizer(
             stopwords=stopwords,
+            pipeline=pipeline,
             use_lvg_stopwords=use_lvg_stopwords,
             use_lexicon=use_lexicon,
             use_citation=use_citation,

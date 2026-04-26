@@ -60,6 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=10,
         help="Limit on variant combinations to guard against explosion (default: 10, matches LVG MAX_RULE_UNINFLECTED_TERMS).",
     )
+    parser.add_argument(
+        "--pipeline",
+        choices=("medical", "chemical"),
+        default="medical",
+        help="Pipeline preset: 'medical' (default LVG flow) or 'chemical' (preserve punctuation/order for IUPAC and small-molecule names).",
+    )
     return parser
 
 
@@ -75,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
 
     normer = NormNormalizer(
         stopwords=stopwords,
+        pipeline=args.pipeline,
         use_lvg_stopwords=not args.no_lvg_stopwords,
         max_combinations=args.max_combinations,
     )
